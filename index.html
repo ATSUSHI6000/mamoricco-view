@@ -50,7 +50,6 @@
     };
   </script>
 
-  <!-- 🌟 esm.sh の ?bundle 機能で全プログラムを一括ロード！ -->
   <script type="module">
     log('📱 ページ読込完了。合体版SDKのダウンロードを開始...');
 
@@ -58,18 +57,38 @@
     const touchArea = document.getElementById('touch-area');
 
     async function startApp() {
-      try {
-        log('📦 通信ライブラリ（一括バンドル版）を読み込み中...');
-        
-        // 🌟 ここが決め手！?bundle をつけることで1ファイルに合体！
-        const { SkyWayContext, SFURoom, LocalDataStream } = await import('https://esm.sh/@skyway-sdk/room@latest?bundle');
+      let SkyWayContext, SFURoom, LocalDataStream;
 
-        if (!SkyWayContext || !SFURoom) {
-          log('❌ ライブラリの初期化に失敗しました', true);
-          return;
+      const cdnUrls = [
+        'https://esm.sh/@skyway-sdk/room@latest?bundle',
+        'https://cdn.jsdelivr.net/npm/@skyway-sdk/room/+esm'
+      ];
+
+      for (const url of cdnUrls) {
+        try {
+          log('📦 通信ライブラリをロード中...');
+          const mod = await import(url);
+
+          // 🌟 直接 / default配下の両方から安全に抽出！
+          SkyWayContext = mod.SkyWayContext || mod.default?.SkyWayContext;
+          SFURoom = mod.SFURoom || mod.default?.SFURoom;
+          LocalDataStream = mod.LocalDataStream || mod.default?.LocalDataStream;
+
+          if (SkyWayContext && SFURoom) {
+            log('✅ SkyWay SDKの読み込み・初期化成功！');
+            break;
+          }
+        } catch (e) {
+          log('⚠️ ロード試行スキップ: ' + e.message);
         }
-        log('✅ SkyWay SDKの読み込み・合体完了！');
+      }
 
+      if (!SkyWayContext || !SFURoom) {
+        log('❌ ライブラリの構造解析に失敗しました。再読み込みしてください。', true);
+        return;
+      }
+
+      try {
         log('🔑 1/4 GASへトークン要求中...');
         const res = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
         const data = await res.json();
