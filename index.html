@@ -26,7 +26,7 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <!-- 📟 iPhone画面デバッグログ枠 -->
+    <!-- 📟 デバッグログ表示用 -->
     <div id="log-box">🚀 診断システム起動中...<br></div>
   </div>
 
@@ -42,7 +42,7 @@
     }
 
     window.onerror = function(msg, url, line) {
-      log(`❌ 構文/実行エラー: ${msg} (L${line})`, true);
+      log(`❌ 構文エラー: ${msg} (L${line})`, true);
       return false;
     };
     window.onunhandledrejection = function(e) {
@@ -50,45 +50,26 @@
     };
   </script>
 
+  <!-- 🌟 esm.sh の ?bundle 機能で全プログラムを一括ロード！ -->
   <script type="module">
-    log('📱 ページ読込完了。通信ライブラリの自動切替ロードを開始...');
+    log('📱 ページ読込完了。合体版SDKのダウンロードを開始...');
 
     const videoElement = document.getElementById('remote-video');
     const touchArea = document.getElementById('touch-area');
 
     async function startApp() {
-      let SkyWayContext, SFURoom, LocalDataStream;
-
-      // 🌐 予備含む高速CDNリスト
-      const cdnList = [
-        'https://cdn.jsdelivr.net/npm/@skyway-sdk/room/+esm',
-        'https://esm.sh/@skyway-sdk/room',
-        'https://cdn.skypack.dev/@skyway-sdk/room'
-      ];
-
-      for (const url of cdnList) {
-        const domain = url.split('/')[2];
-        try {
-          log(`📦 ${domain} からSDK読み込み試行中...`);
-          const mod = await import(url);
-          if (mod && mod.SkyWayContext && mod.SFURoom) {
-            SkyWayContext = mod.SkyWayContext;
-            SFURoom = mod.SFURoom;
-            LocalDataStream = mod.LocalDataStream;
-            log(`✅ ${domain} からSDK読み込み成功！`);
-            break;
-          }
-        } catch (e) {
-          log(`⚠️ ${domain} 接続失敗。次のサーバーへ切り替えます...`);
-        }
-      }
-
-      if (!SkyWayContext || !SFURoom) {
-        log('❌ すべての通信サーバーでライブラリ読み込みに失敗しました', true);
-        return;
-      }
-
       try {
+        log('📦 通信ライブラリ（一括バンドル版）を読み込み中...');
+        
+        // 🌟 ここが決め手！?bundle をつけることで1ファイルに合体！
+        const { SkyWayContext, SFURoom, LocalDataStream } = await import('https://esm.sh/@skyway-sdk/room@latest?bundle');
+
+        if (!SkyWayContext || !SFURoom) {
+          log('❌ ライブラリの初期化に失敗しました', true);
+          return;
+        }
+        log('✅ SkyWay SDKの読み込み・合体完了！');
+
         log('🔑 1/4 GASへトークン要求中...');
         const res = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
         const data = await res.json();
@@ -161,7 +142,7 @@
         });
 
       } catch (err) {
-        log('❌ 全体例外エラー: ' + (err.message || err), true);
+        log('❌ エラーが発生しました: ' + (err.message || err), true);
       }
     }
 
