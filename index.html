@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>まもりっこ - 受信・遠隔操作モニター</title>
+  <!-- 優先CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js" crossorigin="anonymous"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -89,26 +91,54 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <!-- 初期文字を「起動中」に変更（フリーズ判定用） -->
-    <div class="status-badge" id="status-text">🔄 起動処理中...</div>
+    <div class="status-badge" id="status-text">📦 SkyWayライブラリを読み込んでいます...</div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js"></script>
   <script>
-    window.addEventListener('DOMContentLoaded', async () => {
+    // SDKを確実に取得する自動フォールバック関数
+    async function loadSkyWaySDK() {
+      if (window.skywayRoom || window.SkyWayRoom) return true;
+      
+      const cdns = [
+        'https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js',
+        'https://unpkg.com/@skyway-sdk/room/dist/skyway-room.js',
+        'https://cdn.jsdelivr.net/npm/@skyway-sdk/room'
+      ];
+
+      for (const url of cdns) {
+        try {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.onload = () => resolve();
+            script.onerror = () => reject();
+            document.head.appendChild(script);
+          });
+          if (window.skywayRoom || window.SkyWayRoom) return true;
+        } catch (e) {
+          console.warn('CDN load failed:', url);
+        }
+      }
+      return false;
+    }
+
+    window.addEventListener('load', async () => {
       const statusText = document.getElementById('status-text');
       const videoElement = document.getElementById('remote-video');
       const touchArea = document.getElementById('touch-area');
 
+      statusText.innerText = "📦 SkyWayライブラリを確認中...";
+      const sdkLoaded = await loadSkyWaySDK();
+
+      if (!sdkLoaded) {
+        statusText.innerText = "❌ ライブラリ読み込み失敗。通信環境を確認して再読み込みしてください。";
+        return;
+      }
+
+      const skywayObj = window.skywayRoom || window.SkyWayRoom;
+      const { SkyWayContext, SFURoom, LocalDataStream } = skywayObj;
+
       try {
-        // SDK読み込みチェック
-        if (typeof skywayRoom === 'undefined') {
-          statusText.innerText = "❌ SDK読み込みエラー（再読み込みしてください）";
-          return;
-        }
-
-        const { SkyWayContext, SFURoom } = skywayRoom;
-
         // 1. GETリクエストでトークンを取得
         statusText.innerText = "🔑 1/4 トークン取得中...";
         const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
@@ -129,8 +159,13 @@
         statusText.innerText = "⚙️ 3/4 遠隔操作ストリーム設定中...";
         let dataStream = null;
         try {
-          dataStream = await SkyWayContext.CreateDataStream();
-          await member.publish(dataStream);
+          if (LocalDataStream) {
+            dataStream = new LocalDataStream();
+            await member.publish(dataStream);
+          } else {
+            dataStream = await SkyWayContext.CreateDataStream();
+            await member.publish(dataStream);
+          }
         } catch (dsErr) {
           console.log("DataStream Notice:", dsErr);
         }
