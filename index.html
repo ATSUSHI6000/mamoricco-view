@@ -12,7 +12,6 @@
     .video-container { position: relative; width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 12px; overflow: hidden; touch-action: none; }
     video { width: 100%; height: 100%; object-fit: contain; pointer-events: none !important; }
     .touch-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: pointer; }
-    /* 📟 画面デバッグログ用黒枠 */
     #log-box { text-align: left; background: #1e1e1e; color: #00ff66; padding: 10px; border-radius: 10px; font-family: monospace; font-size: 11px; max-height: 180px; overflow-y: auto; margin-top: 10px; word-break: break-all; line-height: 1.4; }
     .error-log { color: #ff5555 !important; font-weight: bold; }
   </style>
@@ -27,12 +26,11 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <!-- 📟 iPhone画面上に直接エラーを表示する黒枠 -->
+    <!-- 📟 iPhone画面デバッグログ枠 -->
     <div id="log-box">🚀 診断システム起動中...<br></div>
   </div>
 
   <script>
-    // 🔍 エラーとログを画面上に表示する関数
     function log(msg, isError = false) {
       const box = document.getElementById('log-box');
       if (box) {
@@ -43,34 +41,52 @@
       }
     }
 
-    // JavaScriptのすべてのエラーを横取りして画面に表示
     window.onerror = function(msg, url, line) {
       log(`❌ 構文/実行エラー: ${msg} (L${line})`, true);
       return false;
     };
     window.onunhandledrejection = function(e) {
-      log(`❌ 非同期通信エラー: ${e.reason}`, true);
+      log(`❌ 通信エラー: ${e.reason}`, true);
     };
   </script>
 
-  <!-- SkyWay SDK の読み込み -->
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room@latest/dist/skyway-room.js" 
-          onload="log('✅ SkyWay SDKの読み込み完了！')" 
-          onerror="log('❌ SkyWay SDKのダウンロード失敗（CDN通信ブロック）', true)"></script>
+  <script type="module">
+    log('📱 ページ読込完了。通信ライブラリの自動切替ロードを開始...');
 
-  <script>
-    window.addEventListener('load', async () => {
-      log('📱 ページ読込完了。接続処理を開始します...');
+    const videoElement = document.getElementById('remote-video');
+    const touchArea = document.getElementById('touch-area');
 
-      const videoElement = document.getElementById('remote-video');
-      const touchArea = document.getElementById('touch-area');
+    async function startApp() {
+      let SkyWayContext, SFURoom, LocalDataStream;
 
-      if (typeof skywayRoom === 'undefined') {
-        log('❌ エラー: skywayRoom 変数が読み込まれていません', true);
-        return;
+      // 🌐 予備含む高速CDNリスト
+      const cdnList = [
+        'https://cdn.jsdelivr.net/npm/@skyway-sdk/room/+esm',
+        'https://esm.sh/@skyway-sdk/room',
+        'https://cdn.skypack.dev/@skyway-sdk/room'
+      ];
+
+      for (const url of cdnList) {
+        const domain = url.split('/')[2];
+        try {
+          log(`📦 ${domain} からSDK読み込み試行中...`);
+          const mod = await import(url);
+          if (mod && mod.SkyWayContext && mod.SFURoom) {
+            SkyWayContext = mod.SkyWayContext;
+            SFURoom = mod.SFURoom;
+            LocalDataStream = mod.LocalDataStream;
+            log(`✅ ${domain} からSDK読み込み成功！`);
+            break;
+          }
+        } catch (e) {
+          log(`⚠️ ${domain} 接続失敗。次のサーバーへ切り替えます...`);
+        }
       }
 
-      const { SkyWayContext, SFURoom } = skywayRoom;
+      if (!SkyWayContext || !SFURoom) {
+        log('❌ すべての通信サーバーでライブラリ読み込みに失敗しました', true);
+        return;
+      }
 
       try {
         log('🔑 1/4 GASへトークン要求中...');
@@ -92,8 +108,13 @@
         log('⚙️ 3/4 データストリーム準備中...');
         let dataStream = null;
         try {
-          dataStream = await SkyWayContext.CreateDataStream();
-          await member.publish(dataStream);
+          if (LocalDataStream) {
+            dataStream = new LocalDataStream();
+            await member.publish(dataStream);
+          } else {
+            dataStream = await SkyWayContext.CreateDataStream();
+            await member.publish(dataStream);
+          }
           log('✅ 3/4 遠隔操作ストリーム設定完了！');
         } catch(dsErr) {
           log('⚠️ 3/4 データストリーム警告: ' + dsErr.message);
@@ -142,7 +163,9 @@
       } catch (err) {
         log('❌ 全体例外エラー: ' + (err.message || err), true);
       }
-    });
+    }
+
+    startApp();
   </script>
 </body>
 </html>
