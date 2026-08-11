@@ -89,19 +89,30 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <div class="status-badge" id="status-text">📦 通信準備中...</div>
+    <div class="status-badge" id="status-text">📦 通信ライブラリ読み込み中...</div>
   </div>
 
-  <!-- 🌟 最新モジュール形式でSkyWayライブラリを直接読み込み！ -->
-  <script type="module">
-    import { SkyWayContext, SFURoom, LocalDataStream } from 'https://cdn.jsdelivr.net/npm/@skyway-sdk/room/+esm';
+  <!-- 🌟 ライブラリが読み込まれたら即座に initSkyWay() を実行 -->
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js" onload="initSkyWay()" onerror="handleLoadError()"></script>
 
-    const statusText = document.getElementById('status-text');
-    const videoElement = document.getElementById('remote-video');
-    const touchArea = document.getElementById('touch-area');
+  <script>
+    function handleLoadError() {
+      document.getElementById('status-text').innerText = "❌ ライブラリ読み込み失敗（通信環境をご確認ください）";
+    }
 
-    async function startReceiver() {
+    async function initSkyWay() {
+      const statusText = document.getElementById('status-text');
+      const videoElement = document.getElementById('remote-video');
+      const touchArea = document.getElementById('touch-area');
+
       try {
+        if (typeof skywayRoom === 'undefined') {
+          statusText.innerText = "❌ SkyWayの初期化に失敗しました";
+          return;
+        }
+
+        const { SkyWayContext, SFURoom } = skywayRoom;
+
         // 1. GETリクエストでトークンを取得
         statusText.innerText = "🔑 1/4 トークン取得中...";
         const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
@@ -122,13 +133,8 @@
         statusText.innerText = "⚙️ 3/4 遠隔操作ストリーム設定中...";
         let dataStream = null;
         try {
-          if (typeof LocalDataStream !== 'undefined') {
-            dataStream = new LocalDataStream();
-            await member.publish(dataStream);
-          } else {
-            dataStream = await SkyWayContext.CreateDataStream();
-            await member.publish(dataStream);
-          }
+          dataStream = await SkyWayContext.CreateDataStream();
+          await member.publish(dataStream);
         } catch (dsErr) {
           console.log("DataStream Notice:", dsErr);
         }
@@ -181,8 +187,6 @@
         statusText.innerText = "❌ エラー: " + (err.message || err);
       }
     }
-
-    startReceiver();
   </script>
 </body>
 </html>
