@@ -40,22 +40,20 @@
       position: relative;
       width: 100%;
       aspect-ratio: 9 / 16;
-      background: #000;
+      background: #222;
       border-radius: 12px;
       overflow: hidden;
       touch-action: none;
     }
     video {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
       object-fit: contain;
-      pointer-events: none !important;
-    }
-    video::-webkit-media-controls,
-    video::-webkit-media-controls-enclosure,
-    video::-webkit-media-controls-panel {
-      display: none !important;
-      -webkit-appearance: none !important;
+      background: #000;
+      z-index: 1;
     }
     .touch-overlay {
       position: absolute;
@@ -148,10 +146,18 @@
         // 映像受信＆自動再生処理
         const subscribeAndPlay = async (pub) => {
           if (pub.contentType === 'video') {
-            statusText.innerText = "📥 映像を受信中...";
+            statusText.innerText = "📥 映像受信！描画処理中...";
             try {
               const { stream } = await member.subscribe(pub.id);
+              
+              // 🌟 1. SDK標準アタッチ
               stream.attach(videoElement);
+
+              // 🌟 2. Safari用直入れフォールバック（画面真っ暗対策）
+              if (stream.track) {
+                videoElement.srcObject = new MediaStream([stream.track]);
+              }
+
               await videoElement.play();
               statusText.innerText = "🎉 遠隔操作が可能です！";
             } catch (e) {
@@ -167,12 +173,10 @@
         let startX = 0, startY = 0;
 
         touchArea.addEventListener('pointerdown', (e) => {
-          // タップされたら強制的に映像再生を試みる
-          if (videoElement.paused) {
-            videoElement.play().then(() => {
-              statusText.innerText = "🎉 遠隔操作が可能です！";
-            }).catch(err => console.log('Play err:', err));
-          }
+          // 強制再再生
+          videoElement.play().then(() => {
+            statusText.innerText = "🎉 遠隔操作が可能です！";
+          }).catch(err => console.log('Play err:', err));
 
           const rect = touchArea.getBoundingClientRect();
           startX = (e.clientX - rect.left) / rect.width;
