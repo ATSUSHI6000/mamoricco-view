@@ -73,12 +73,12 @@
       color: #d81b60;
       border-radius: 20px;
       font-weight: bold;
-      font-size: 14px;
+      font-size: 13px;
       display: inline-block;
       word-break: break-all;
     }
   </style>
-  <!-- 🌟 SkyWay公式の正解CDNアドレス（skyway_room-latest.js） -->
+  <!-- 🌟 SkyWay公式CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
 </head>
 <body>
@@ -100,15 +100,23 @@
       const videoElement = document.getElementById('remote-video');
       const touchArea = document.getElementById('touch-area');
 
-      // SkyWay公式のグローバル変数（skyway_room）を取得
-      const skywayObj = window.skyway_room || window.skywayRoom;
+      // SkyWayオブジェクトの取得
+      const skywayObj = window.skyway_room || window.skywayRoom || window.skyway;
 
       if (!skywayObj) {
-        statusText.innerText = "❌ ライブラリ初期化失敗（再読み込みしてください）";
+        statusText.innerText = "❌ ライブラリ未検出（再読み込みしてください）";
         return;
       }
 
-      const { SkyWayContext, SFURoom, LocalDataStream } = skywayObj;
+      // 🌟 ルーム作成用クラスの自動判定・フォールバック
+      const SkyWayContext = skywayObj.SkyWayContext;
+      const RoomClass = skywayObj.SFURoom || skywayObj.SkyWayRoom || skywayObj.SfuRoom || skywayObj.SkyWayChannel;
+      const LocalDataStream = skywayObj.LocalDataStream;
+
+      if (!RoomClass) {
+        statusText.innerText = "❌ ルーム定義エラー: " + Object.keys(skywayObj).join(', ');
+        return;
+      }
 
       try {
         // 1. GET通信でGASからトークンを取得
@@ -124,7 +132,7 @@
         // 2. ルームに接続
         statusText.innerText = "🌐 2/3 ルームに接続中...";
         const context = await SkyWayContext.Create(data.authToken);
-        const room = await SFURoom.FindOrCreate(context, { name: 'mamorikko-room' });
+        const room = await RoomClass.FindOrCreate(context, { name: 'mamorikko-room' });
         const member = await room.join({ name: 'iPhoneReceiver' });
 
         // 3. データストリーム（遠隔操作用）の準備
@@ -133,7 +141,7 @@
           if (LocalDataStream) {
             dataStream = new LocalDataStream();
             await member.publish(dataStream);
-          } else {
+          } else if (SkyWayContext.CreateDataStream) {
             dataStream = await SkyWayContext.CreateDataStream();
             await member.publish(dataStream);
           }
@@ -147,9 +155,9 @@
         const subscribeAndPlay = async (pub) => {
           if (pub.contentType === 'video') {
             statusText.innerText = "📥 映像を受信中...";
-            const { stream } = await member.subscribe(pub.id);
-            stream.attach(videoElement);
             try {
+              const { stream } = await member.subscribe(pub.id);
+              stream.attach(videoElement);
               await videoElement.play();
               statusText.innerText = "🎉 遠隔操作が可能です！";
             } catch (e) {
@@ -158,8 +166,8 @@
           }
         };
 
-        room.publications.forEach(pub => subscribeAndPlay(pub));
-        room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
+        if (room.publications) room.publications.forEach(pub => subscribeAndPlay(pub));
+        if (room.onStreamPublished) room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
 
         // 5. タップ・スワイプ操作送信処理
         let startX = 0, startY = 0;
