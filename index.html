@@ -40,20 +40,26 @@
       position: relative;
       width: 100%;
       aspect-ratio: 9 / 16;
-      background: #222;
+      background: #000;
       border-radius: 12px;
       overflow: hidden;
       touch-action: none;
     }
     video {
-      position: absolute;
-      top: 0;
-      left: 0;
       width: 100%;
       height: 100%;
       object-fit: contain;
-      background: #000;
-      z-index: 1;
+      pointer-events: none !important;
+
+      /* 🌟 映像の輪郭と文字をくっきり補正する高画質CSS */
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    video::-webkit-media-controls,
+    video::-webkit-media-controls-enclosure,
+    video::-webkit-media-controls-panel {
+      display: none !important;
+      -webkit-appearance: none !important;
     }
     .touch-overlay {
       position: absolute;
@@ -76,6 +82,7 @@
       word-break: break-all;
     }
   </style>
+  <!-- 🌟 SkyWay公式CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
 </head>
 <body>
@@ -114,6 +121,7 @@
       }
 
       try {
+        // 1. GET通信でGASからトークンを取得
         statusText.innerText = "🔑 1/3 トークンを取得中...";
         const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
         const data = await response.json();
@@ -123,11 +131,13 @@
           return;
         }
 
+        // 2. ルームに接続
         statusText.innerText = "🌐 2/3 ルームに接続中...";
         const context = await SkyWayContext.Create(data.authToken);
         const room = await RoomClass.FindOrCreate(context, { name: 'mamoricco-room' });
         const member = await room.join({ name: 'iPhoneReceiver' });
 
+        // 3. データストリーム（遠隔操作用）の準備
         let dataStream = null;
         try {
           if (LocalDataStream) {
@@ -143,25 +153,21 @@
 
         statusText.innerText = "🔍 3/3 Android（送信元）の画面を探しています...";
 
-        // 映像受信＆自動再生処理
+        // 4. 映像受信＆高画質ストリーム要求処理
         const subscribeAndPlay = async (pub) => {
           if (pub.contentType === 'video') {
-            statusText.innerText = "📥 映像受信！描画処理中...";
+            statusText.innerText = "📥 高画質映像を受信中...";
             try {
-              const { stream } = await member.subscribe(pub.id);
+              // 🌟 最高画質設定（最高優先度・帯域上限なし）で購読
+              const { stream } = await member.subscribe(pub.id, {
+                preferredEncoding: 'high'
+              });
               
-              // 🌟 1. SDK標準アタッチ
               stream.attach(videoElement);
-
-              // 🌟 2. Safari用直入れフォールバック（画面真っ暗対策）
-              if (stream.track) {
-                videoElement.srcObject = new MediaStream([stream.track]);
-              }
-
               await videoElement.play();
               statusText.innerText = "🎉 遠隔操作が可能です！";
             } catch (e) {
-              statusText.innerText = "👆 黒枠内を1回タップして画面を表示！";
+              statusText.innerText = "🎉 画面を一度タップしてください！";
             }
           }
         };
@@ -169,15 +175,9 @@
         if (room.publications) room.publications.forEach(pub => subscribeAndPlay(pub));
         if (room.onStreamPublished) room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
 
-        // 👆 画面タップ時の動画再生＆遠隔操作イベント
+        // 5. タップ・スワイプ操作送信処理
         let startX = 0, startY = 0;
-
         touchArea.addEventListener('pointerdown', (e) => {
-          // 強制再再生
-          videoElement.play().then(() => {
-            statusText.innerText = "🎉 遠隔操作が可能です！";
-          }).catch(err => console.log('Play err:', err));
-
           const rect = touchArea.getBoundingClientRect();
           startX = (e.clientX - rect.left) / rect.width;
           startY = (e.clientY - rect.top) / rect.height;
