@@ -2,155 +2,171 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>まもりっこ - 受信モニター</title>
-  <!-- SkyWay SDK の読み込み -->
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/token/dist/skyway_token-latest.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>まもりっこ - 受信・遠隔操作モニター</title>
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
     body {
-      margin: 0;
-      padding: 16px;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
       background-color: #fce4ec;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      text-align: center;
-      color: #333;
+      margin: 0;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
     }
     .card {
       background: white;
-      padding: 20px;
       border-radius: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-      max-width: 420px;
-      margin: 0 auto;
+      padding: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
     }
-    h1 {
-      font-size: 20px;
+    h2 {
       color: #e91e63;
-      margin-top: 0;
+      font-size: 20px;
+      margin-top: 5px;
       margin-bottom: 15px;
     }
     .video-container {
       position: relative;
       width: 100%;
-      background-color: #000;
-      border-radius: 14px;
+      aspect-ratio: 9 / 16;
+      background: #000;
+      border-radius: 12px;
       overflow: hidden;
+      touch-action: none;
     }
+    /* 🎥 ビデオ本体＆Safari再生ボタン完全ブロック設定 */
     video {
       width: 100%;
-      height: 540px;
-      background-color: #000;
+      height: 100%;
       object-fit: contain;
-      display: block;
+      pointer-events: none !important;
     }
-    .status {
+    /* iOS Safariの標準コントロール（再生・停止ボタン等）を強制削除 */
+    video::-webkit-media-controls,
+    video::-webkit-media-controls-enclosure,
+    video::-webkit-media-controls-panel {
+      display: none !important;
+      -webkit-appearance: none !important;
+    }
+    .touch-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      cursor: pointer;
+    }
+    .status-badge {
       margin-top: 15px;
-      font-size: 14px;
-      font-weight: bold;
-      color: #e91e63;
-      padding: 8px 12px;
+      padding: 8px 15px;
       background: #fff0f5;
-      border-radius: 10px;
+      color: #d81b60;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 14px;
+      display: inline-block;
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h1>❤️ まもりっこ 画面モニター</h1>
+    <h2>❤️ まもりっこ 遠隔操作モニター</h2>
+    
     <div class="video-container">
-      <video id="remote-video" autoplay playsinline controls></video>
+      <video id="remote-video" autoplay playsinline muted webkit-playsinline disablepictureinpicture></video>
+      <div class="touch-overlay" id="touch-area"></div>
     </div>
-    <div class="status" id="status-text">📡 接続準備中...</div>
+
+    <div class="status-badge" id="status-text">📡 接続準備中...</div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js"></script>
   <script>
-    const APP_ID = "66b8e792-5087-4504-9d55-00cd6560ebb5";
-    const SECRET_KEY = "BnCIV4hMkw0Nz9S6cIF8vfBPPZ+wz8I1mGcgy1rog94=";
-    const ROOM_NAME = "mamorikko-room";
+    const { SkyWayContext, SFURoom } = skywayRoom;
 
-    async function startReceive() {
-      const statusText = document.getElementById("status-text");
-      const videoElement = document.getElementById("remote-video");
+    async function startReceiver() {
+      const statusText = document.getElementById('status-text');
+      const videoElement = document.getElementById('remote-video');
+      const touchArea = document.getElementById('touch-area');
 
       try {
-        const { SkyWayAuthToken } = skyway_token;
-        const { SkyWayContext, SkyWayRoom } = skyway_room;
-
-        const now = Math.floor(Date.now() / 1000);
-        const token = new SkyWayAuthToken({
-          jti: crypto.randomUUID(),
-          iat: now,
-          exp: now + 3600 * 12,
-          scope: {
-            app: {
-              id: APP_ID,
-              turn: true,
-              actions: ["read"],
-              channels: [
-                {
-                  id: "*",
-                  name: "*",
-                  actions: ["write"],
-                  members: [
-                    {
-                      id: "*",
-                      name: "*",
-                      actions: ["write"],
-                      publication: { actions: ["write"] },
-                      subscription: { actions: ["write"] }
-                    }
-                  ],
-                  sfuBots: [
-                    {
-                      actions: ["write"],
-                      forwardings: [{ actions: ["write"] }]
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }).encode(SECRET_KEY);
-
-        statusText.innerText = "🔄 SkyWayサーバーに接続中...";
-
-        const context = await SkyWayContext.Create(token);
-        const room = await SkyWayRoom.FindOrCreate(context, {
-          name: ROOM_NAME,
-          type: "sfu"
+        const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec', {
+          method: 'POST',
+          body: JSON.stringify({ contentType: 'get_skyway_token' })
         });
+        const data = await response.json();
+        
+        if (!data.authToken) {
+          statusText.innerText = "❌ 認証エラー";
+          return;
+        }
 
-        const me = await room.join();
-        statusText.innerText = "🟢 送信元（Android）の画面を探しています...";
+        const context = await SkyWayContext.Create(data.authToken);
+        const room = await SFURoom.FindOrCreate(context, { name: 'mamorikko-room' });
+        const member = await room.join({ name: 'iPhoneReceiver' });
 
-        // 既存の配信がある場合
+        const dataStream = await SkyWayContext.CreateDataStream();
+        await member.publish(dataStream);
+
+        statusText.innerText = "🔍 送信元（Android）の画面を探しています...";
+
         room.publications.forEach(async (pub) => {
-          if (pub.publisher.id !== me.id) {
-            const { stream } = await me.subscribe(pub.id);
-            stream.attach(videoElement);
-            statusText.innerText = "🎉 Android画面を受信中！";
+          if (pub.contentType === 'video') {
+            const stream = await member.subscribe(pub.id);
+            stream.stream.attach(videoElement);
+            statusText.innerText = "🎉 遠隔操作が可能です！";
           }
         });
 
-        // 新しい配信が開始された場合
         room.onStreamPublished.add(async (e) => {
-          if (e.publisher.id !== me.id) {
-            const { stream } = await me.subscribe(e.publication.id);
-            stream.attach(videoElement);
-            statusText.innerText = "🎉 Android画面を受信中！";
+          if (e.publication.contentType === 'video') {
+            const stream = await member.subscribe(e.publication.id);
+            stream.stream.attach(videoElement);
+            statusText.innerText = "🎉 遠隔操作が可能です！";
           }
         });
 
-      } catch (e) {
-        console.error(e);
-        statusText.innerText = "❌ 接続エラー: " + e.message;
+        let startX = 0, startY = 0;
+
+        touchArea.addEventListener('pointerdown', (e) => {
+          const rect = touchArea.getBoundingClientRect();
+          startX = (e.clientX - rect.left) / rect.width;
+          startY = (e.clientY - rect.top) / rect.height;
+        });
+
+        touchArea.addEventListener('pointerup', (e) => {
+          const rect = touchArea.getBoundingClientRect();
+          const endX = (e.clientX - rect.left) / rect.width;
+          const endY = (e.clientY - rect.top) / rect.height;
+
+          const dist = Math.hypot(endX - startX, endY - startY);
+          if (dist < 0.03) {
+            dataStream.write(JSON.stringify({ type: 'tap', x: endX, y: endY }));
+          } else {
+            dataStream.write(JSON.stringify({ type: 'swipe', sx: startX, sy: startY, ex: endX, ey: endY }));
+          }
+        });
+
+      } catch (err) {
+        console.error(err);
+        statusText.innerText = "❌ 接続エラーが発生しました";
       }
     }
 
-    window.addEventListener("load", startReceive);
+    startReceiver();
   </script>
 </body>
 </html>
