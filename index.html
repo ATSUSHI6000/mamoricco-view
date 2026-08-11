@@ -16,8 +16,8 @@
     .error-log { color: #ff5555 !important; font-weight: bold; }
   </style>
 
-  <!-- 🌟 SkyWay Core SDK（グローバル読み込み版） -->
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/core@latest/dist/index.js"></script>
+  <!-- 🌟 SkyWay Room SDK（正解パス） -->
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room"></script>
 </head>
 <body>
 
@@ -53,22 +53,21 @@
     };
 
     window.addEventListener('load', async () => {
-      log('📱 ページ読込完了。SDK初期化確認中...');
+      log('📱 ページ読込完了。SDK検出確認中...');
 
       const videoElement = document.getElementById('remote-video');
       const touchArea = document.getElementById('touch-area');
 
-      // グローバルオブジェクトの判定
-      const skywayObj = window.skyway || window.SkyWay;
-
-      if (!skywayObj || !skywayObj.SkyWayContext || !skywayObj.SkyWayChannel) {
-        log('❌ SkyWay Core SDKの読み込みに失敗しました（CDN通信エラー）', true);
+      // skywayRoom オブジェクトの確認
+      if (typeof skywayRoom === 'undefined' && typeof SkyWayRoom === 'undefined') {
+        log('❌ SkyWay SDKの読み込みに失敗しました', true);
         return;
       }
 
-      log('✅ SkyWay Core SDKの検出・読み込み完了！');
+      log('✅ SkyWay SDKの読み込み成功！');
 
-      const { SkyWayContext, SkyWayChannel } = skywayObj;
+      const skywayObj = typeof skywayRoom !== 'undefined' ? skywayRoom : SkyWayRoom;
+      const { SkyWayContext, SFURoom } = skywayObj;
 
       try {
         log('🔑 1/4 GASへトークン要求中...');
@@ -81,11 +80,11 @@
         }
         log('✅ 1/4 トークン取得成功！');
 
-        log('🌐 2/4 SkyWay チャンネル接続中...');
+        log('🌐 2/4 SkyWayルーム入室中...');
         const context = await SkyWayContext.Create(data.authToken);
-        const channel = await SkyWayChannel.FindOrCreate(context, { name: 'mamorikko-room' });
-        const member = await channel.join({ name: 'iPhoneReceiver' });
-        log('✅ 2/4 チャンネル接続成功！');
+        const room = await SFURoom.FindOrCreate(context, { name: 'mamorikko-room' });
+        const member = await room.join({ name: 'iPhoneReceiver' });
+        log('✅ 2/4 ルーム入室成功！');
 
         log('⚙️ 3/4 データストリーム準備中...');
         let dataStream = null;
@@ -113,8 +112,8 @@
           }
         };
 
-        channel.publications.forEach(pub => subscribeAndPlay(pub));
-        channel.onStreamPublished.add(e => subscribeAndPlay(e.publication));
+        room.publications.forEach(pub => subscribeAndPlay(pub));
+        room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
 
         // タップ・スワイプイベント
         let startX = 0, startY = 0;
