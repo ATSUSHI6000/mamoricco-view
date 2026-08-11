@@ -15,6 +15,9 @@
     #log-box { text-align: left; background: #1e1e1e; color: #00ff66; padding: 10px; border-radius: 10px; font-family: monospace; font-size: 11px; max-height: 180px; overflow-y: auto; margin-top: 10px; word-break: break-all; line-height: 1.4; }
     .error-log { color: #ff5555 !important; font-weight: bold; }
   </style>
+
+  <!-- 🌟 SkyWay Core SDK（グローバル読み込み版） -->
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/core@latest/dist/index.js"></script>
 </head>
 <body>
 
@@ -48,45 +51,24 @@
     window.onunhandledrejection = function(e) {
       log(`❌ 通信エラー: ${e.reason}`, true);
     };
-  </script>
 
-  <script type="module">
-    log('📱 ページ読込完了。合体版SDKのダウンロードを開始...');
+    window.addEventListener('load', async () => {
+      log('📱 ページ読込完了。SDK初期化確認中...');
 
-    const videoElement = document.getElementById('remote-video');
-    const touchArea = document.getElementById('touch-area');
+      const videoElement = document.getElementById('remote-video');
+      const touchArea = document.getElementById('touch-area');
 
-    async function startApp() {
-      let SkyWayContext, SFURoom, LocalDataStream;
+      // グローバルオブジェクトの判定
+      const skywayObj = window.skyway || window.SkyWay;
 
-      const cdnUrls = [
-        'https://esm.sh/@skyway-sdk/room@latest?bundle',
-        'https://cdn.jsdelivr.net/npm/@skyway-sdk/room/+esm'
-      ];
-
-      for (const url of cdnUrls) {
-        try {
-          log('📦 通信ライブラリをロード中...');
-          const mod = await import(url);
-
-          // 🌟 直接 / default配下の両方から安全に抽出！
-          SkyWayContext = mod.SkyWayContext || mod.default?.SkyWayContext;
-          SFURoom = mod.SFURoom || mod.default?.SFURoom;
-          LocalDataStream = mod.LocalDataStream || mod.default?.LocalDataStream;
-
-          if (SkyWayContext && SFURoom) {
-            log('✅ SkyWay SDKの読み込み・初期化成功！');
-            break;
-          }
-        } catch (e) {
-          log('⚠️ ロード試行スキップ: ' + e.message);
-        }
-      }
-
-      if (!SkyWayContext || !SFURoom) {
-        log('❌ ライブラリの構造解析に失敗しました。再読み込みしてください。', true);
+      if (!skywayObj || !skywayObj.SkyWayContext || !skywayObj.SkyWayChannel) {
+        log('❌ SkyWay Core SDKの読み込みに失敗しました（CDN通信エラー）', true);
         return;
       }
+
+      log('✅ SkyWay Core SDKの検出・読み込み完了！');
+
+      const { SkyWayContext, SkyWayChannel } = skywayObj;
 
       try {
         log('🔑 1/4 GASへトークン要求中...');
@@ -99,22 +81,17 @@
         }
         log('✅ 1/4 トークン取得成功！');
 
-        log('🌐 2/4 SkyWayルーム入室中...');
+        log('🌐 2/4 SkyWay チャンネル接続中...');
         const context = await SkyWayContext.Create(data.authToken);
-        const room = await SFURoom.FindOrCreate(context, { name: 'mamorikko-room' });
-        const member = await room.join({ name: 'iPhoneReceiver' });
-        log('✅ 2/4 ルーム入室成功！');
+        const channel = await SkyWayChannel.FindOrCreate(context, { name: 'mamorikko-room' });
+        const member = await channel.join({ name: 'iPhoneReceiver' });
+        log('✅ 2/4 チャンネル接続成功！');
 
         log('⚙️ 3/4 データストリーム準備中...');
         let dataStream = null;
         try {
-          if (LocalDataStream) {
-            dataStream = new LocalDataStream();
-            await member.publish(dataStream);
-          } else {
-            dataStream = await SkyWayContext.CreateDataStream();
-            await member.publish(dataStream);
-          }
+          dataStream = await SkyWayContext.CreateDataStream();
+          await member.publish(dataStream);
           log('✅ 3/4 遠隔操作ストリーム設定完了！');
         } catch(dsErr) {
           log('⚠️ 3/4 データストリーム警告: ' + dsErr.message);
@@ -136,8 +113,8 @@
           }
         };
 
-        room.publications.forEach(pub => subscribeAndPlay(pub));
-        room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
+        channel.publications.forEach(pub => subscribeAndPlay(pub));
+        channel.onStreamPublished.add(e => subscribeAndPlay(e.publication));
 
         // タップ・スワイプイベント
         let startX = 0, startY = 0;
@@ -163,9 +140,7 @@
       } catch (err) {
         log('❌ エラーが発生しました: ' + (err.message || err), true);
       }
-    }
-
-    startApp();
+    });
   </script>
 </body>
 </html>
