@@ -52,7 +52,6 @@
       object-fit: contain;
       pointer-events: none !important;
     }
-    /* iOS Safariの標準コントロール（再生・停止ボタン等）を強制削除 */
     video::-webkit-media-controls,
     video::-webkit-media-controls-enclosure,
     video::-webkit-media-controls-panel {
@@ -75,8 +74,9 @@
       color: #d81b60;
       border-radius: 20px;
       font-weight: bold;
-      font-size: 14px;
+      font-size: 13px;
       display: inline-block;
+      word-break: break-all;
     }
   </style>
 </head>
@@ -90,12 +90,12 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <div class="status-badge" id="status-text">📡 接続準備中...</div>
+    <div class="status-badge" id="status-text">📡 1/4 トークン取得中...</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js"></script>
   <script>
-    const { SkyWayContext, SFURoom } = skywayRoom;
+    const { SkyWayContext, SFURoom, LocalDataStream } = skywayRoom;
 
     async function startReceiver() {
       const statusText = document.getElementById('status-text');
@@ -103,6 +103,8 @@
       const touchArea = document.getElementById('touch-area');
 
       try {
+        // 1. GASからトークン取得
+        statusText.innerText = "🔑 1/4 トークン取得中...";
         const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec', {
           method: 'POST',
           body: JSON.stringify({ contentType: 'get_skyway_token' })
@@ -110,35 +112,48 @@
         const data = await response.json();
         
         if (!data.authToken) {
-          statusText.innerText = "❌ 認証エラー";
+          statusText.innerText = "❌ トークン取得失敗";
           return;
         }
 
+        // 2. SkyWayルーム接続
+        statusText.innerText = "🌐 2/4 ルームに入室中...";
         const context = await SkyWayContext.Create(data.authToken);
         const room = await SFURoom.FindOrCreate(context, { name: 'mamorikko-room' });
         const member = await room.join({ name: 'iPhoneReceiver' });
 
-        const dataStream = await SkyWayContext.CreateDataStream();
+        // 3. 遠隔操作用データストリームの準備
+        statusText.innerText = "⚙️ 3/4 遠隔操作ストリーム設定中...";
+        const dataStream = new LocalDataStream();
         await member.publish(dataStream);
 
-        statusText.innerText = "🔍 送信元（Android）の画面を探しています...";
+        statusText.innerText = "🔍 4/4 Android（送信元）の映像を待っています...";
 
-        room.publications.forEach(async (pub) => {
-          if (pub.contentType === 'video') {
-            const stream = await member.subscribe(pub.id);
-            stream.stream.attach(videoElement);
-            statusText.innerText = "🎉 遠隔操作が可能です！";
+        // 映像を受信して再生する共通処理
+        const subscribeAndPlay = async (publication) => {
+          if (publication.contentType === 'video') {
+            statusText.innerText = "📥 映像受信中... 再生開始します";
+            const { stream } = await member.subscribe(publication.id);
+            stream.attach(videoElement);
+            
+            // 🌟 iOS Safari対策：強制的・明示的にplay()を実行！
+            try {
+              await videoElement.play();
+              statusText.innerText = "🎉 遠隔操作が可能です！";
+            } catch (playErr) {
+              console.log("Play error:", playErr);
+              statusText.innerText = "🎉 画面を一度タップしてください！";
+            }
           }
-        });
+        };
 
-        room.onStreamPublished.add(async (e) => {
-          if (e.publication.contentType === 'video') {
-            const stream = await member.subscribe(e.publication.id);
-            stream.stream.attach(videoElement);
-            statusText.innerText = "🎉 遠隔操作が可能です！";
-          }
-        });
+        // 既にある配信をチェック
+        room.publications.forEach(pub => subscribeAndPlay(pub));
 
+        // 後から配信された場合
+        room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
+
+        // 👆 タップ・スワイプ操作の送信用イベント
         let startX = 0, startY = 0;
 
         touchArea.addEventListener('pointerdown', (e) => {
@@ -162,7 +177,7 @@
 
       } catch (err) {
         console.error(err);
-        statusText.innerText = "❌ 接続エラーが発生しました";
+        statusText.innerText = "❌ エラー: " + err.message;
       }
     }
 
