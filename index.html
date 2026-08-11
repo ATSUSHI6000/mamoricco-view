@@ -78,6 +78,8 @@
       word-break: break-all;
     }
   </style>
+  <!-- 🌟 SkyWay公式の正解CDNアドレス（skyway_room-latest.js） -->
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
 </head>
 <body>
 
@@ -89,68 +91,62 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <div class="status-badge" id="status-text">📦 ライブラリを読み込み中...</div>
+    <div class="status-badge" id="status-text">📡 接続準備中...</div>
   </div>
 
   <script>
-    // ライブラリを安全にロードする関数
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
-
     async function startReceiver() {
       const statusText = document.getElementById('status-text');
       const videoElement = document.getElementById('remote-video');
       const touchArea = document.getElementById('touch-area');
 
-      // 1. SkyWayライブラリのロード（失敗したら予備のunpkgから取得）
-      try {
-        await loadScript('https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js');
-      } catch (e) {
-        try {
-          await loadScript('https://unpkg.com/@skyway-sdk/room/dist/skyway-room.js');
-        } catch (err) {
-          statusText.innerText = "❌ ライブラリ通信エラー";
-          return;
-        }
-      }
+      // SkyWay公式のグローバル変数（skyway_room）を取得
+      const skywayObj = window.skyway_room || window.skywayRoom;
 
-      if (typeof skywayRoom === 'undefined') {
-        statusText.innerText = "❌ SkyWayの初期化エラー";
+      if (!skywayObj) {
+        statusText.innerText = "❌ ライブラリ初期化失敗（再読み込みしてください）";
         return;
       }
 
-      const { SkyWayContext, SFURoom } = skywayRoom;
+      const { SkyWayContext, SFURoom, LocalDataStream } = skywayObj;
 
       try {
-        // 2. トークン取得
+        // 1. GET通信でGASからトークンを取得
         statusText.innerText = "🔑 1/3 トークンを取得中...";
         const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
         const data = await response.json();
         
         if (!data || !data.authToken) {
-          statusText.innerText = "❌ トークン取得失敗";
+          statusText.innerText = "❌ トークン取得に失敗しました";
           return;
         }
 
-        // 3. ルーム接続
+        // 2. ルームに接続
         statusText.innerText = "🌐 2/3 ルームに接続中...";
         const context = await SkyWayContext.Create(data.authToken);
         const room = await SFURoom.FindOrCreate(context, { name: 'mamorikko-room' });
         const member = await room.join({ name: 'iPhoneReceiver' });
+
+        // 3. データストリーム（遠隔操作用）の準備
+        let dataStream = null;
+        try {
+          if (LocalDataStream) {
+            dataStream = new LocalDataStream();
+            await member.publish(dataStream);
+          } else {
+            dataStream = await SkyWayContext.CreateDataStream();
+            await member.publish(dataStream);
+          }
+        } catch (dsErr) {
+          console.log('DataStream Notice:', dsErr);
+        }
 
         statusText.innerText = "🔍 3/3 Android（送信元）の画面を探しています...";
 
         // 4. 映像受信処理
         const subscribeAndPlay = async (pub) => {
           if (pub.contentType === 'video') {
-            statusText.innerText = "📥 映像を受信しました！";
+            statusText.innerText = "📥 映像を受信中...";
             const { stream } = await member.subscribe(pub.id);
             stream.attach(videoElement);
             try {
@@ -165,7 +161,7 @@
         room.publications.forEach(pub => subscribeAndPlay(pub));
         room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
 
-        // 5. タップ操作送信処理
+        // 5. タップ・スワイプ操作送信処理
         let startX = 0, startY = 0;
         touchArea.addEventListener('pointerdown', (e) => {
           const rect = touchArea.getBoundingClientRect();
@@ -174,12 +170,16 @@
         });
 
         touchArea.addEventListener('pointerup', (e) => {
+          if (!dataStream) return;
           const rect = touchArea.getBoundingClientRect();
           const endX = (e.clientX - rect.left) / rect.width;
           const endY = (e.clientY - rect.top) / rect.height;
+
           const dist = Math.hypot(endX - startX, endY - startY);
           if (dist < 0.03) {
-            console.log('Tap Event:', endX, endY);
+            dataStream.write(JSON.stringify({ type: 'tap', x: endX, y: endY }));
+          } else {
+            dataStream.write(JSON.stringify({ type: 'swipe', sx: startX, sy: startY, ex: endX, ey: endY }));
           }
         });
 
@@ -189,8 +189,7 @@
       }
     }
 
-    // 画面が準備できたらスタート
-    window.addEventListener('DOMContentLoaded', startReceiver);
+    window.addEventListener('load', startReceiver);
   </script>
 </body>
 </html>
