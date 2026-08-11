@@ -89,25 +89,32 @@
       <div class="touch-overlay" id="touch-area"></div>
     </div>
 
-    <div class="status-badge" id="status-text">📡 1/4 トークン取得中...</div>
+    <!-- 初期文字を「起動中」に変更（フリーズ判定用） -->
+    <div class="status-badge" id="status-text">🔄 起動処理中...</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway-room.js"></script>
   <script>
-    const { SkyWayContext, SFURoom, LocalDataStream } = skywayRoom;
-
-    async function startReceiver() {
+    window.addEventListener('DOMContentLoaded', async () => {
       const statusText = document.getElementById('status-text');
       const videoElement = document.getElementById('remote-video');
       const touchArea = document.getElementById('touch-area');
 
       try {
-        // 1. GETリクエストでトークンを取得（SafariのCORSブロックを完全回避！）
+        // SDK読み込みチェック
+        if (typeof skywayRoom === 'undefined') {
+          statusText.innerText = "❌ SDK読み込みエラー（再読み込みしてください）";
+          return;
+        }
+
+        const { SkyWayContext, SFURoom } = skywayRoom;
+
+        // 1. GETリクエストでトークンを取得
         statusText.innerText = "🔑 1/4 トークン取得中...";
         const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
         const data = await response.json();
         
-        if (!data.authToken) {
+        if (!data || !data.authToken) {
           statusText.innerText = "❌ トークン取得失敗";
           return;
         }
@@ -120,19 +127,23 @@
 
         // 3. 遠隔操作用データストリームの準備
         statusText.innerText = "⚙️ 3/4 遠隔操作ストリーム設定中...";
-        const dataStream = new LocalDataStream();
-        await member.publish(dataStream);
+        let dataStream = null;
+        try {
+          dataStream = await SkyWayContext.CreateDataStream();
+          await member.publish(dataStream);
+        } catch (dsErr) {
+          console.log("DataStream Notice:", dsErr);
+        }
 
         statusText.innerText = "🔍 4/4 Android（送信元）の映像を待っています...";
 
-        // 映像を受信して再生する共通処理
+        // 映像受信＆再生処理
         const subscribeAndPlay = async (publication) => {
           if (publication.contentType === 'video') {
             statusText.innerText = "📥 映像受信中... 再生開始します";
-            const { stream } = await member.subscribe(publication.id);
-            stream.attach(videoElement);
-            
             try {
+              const { stream } = await member.subscribe(publication.id);
+              stream.attach(videoElement);
               await videoElement.play();
               statusText.innerText = "🎉 遠隔操作が可能です！";
             } catch (playErr) {
@@ -154,6 +165,7 @@
         });
 
         touchArea.addEventListener('pointerup', (e) => {
+          if (!dataStream) return;
           const rect = touchArea.getBoundingClientRect();
           const endX = (e.clientX - rect.left) / rect.width;
           const endY = (e.clientY - rect.top) / rect.height;
@@ -168,11 +180,9 @@
 
       } catch (err) {
         console.error(err);
-        statusText.innerText = "❌ エラー: " + err.message;
+        statusText.innerText = "❌ エラー: " + (err.message || err);
       }
-    }
-
-    startReceiver();
+    });
   </script>
 </body>
 </html>
