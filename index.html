@@ -45,7 +45,6 @@
       overflow: hidden;
       touch-action: none;
     }
-    /* 🎥 ビデオ本体＆Safari再生ボタン完全ブロック設定 */
     video {
       width: 100%;
       height: 100%;
@@ -103,12 +102,9 @@
       const touchArea = document.getElementById('touch-area');
 
       try {
-        // 1. GASからトークン取得
+        // 1. GETリクエストでトークンを取得（SafariのCORSブロックを完全回避！）
         statusText.innerText = "🔑 1/4 トークン取得中...";
-        const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec', {
-          method: 'POST',
-          body: JSON.stringify({ contentType: 'get_skyway_token' })
-        });
+        const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
         const data = await response.json();
         
         if (!data.authToken) {
@@ -136,24 +132,19 @@
             const { stream } = await member.subscribe(publication.id);
             stream.attach(videoElement);
             
-            // 🌟 iOS Safari対策：強制的・明示的にplay()を実行！
             try {
               await videoElement.play();
               statusText.innerText = "🎉 遠隔操作が可能です！";
             } catch (playErr) {
-              console.log("Play error:", playErr);
               statusText.innerText = "🎉 画面を一度タップしてください！";
             }
           }
         };
 
-        // 既にある配信をチェック
         room.publications.forEach(pub => subscribeAndPlay(pub));
-
-        // 後から配信された場合
         room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
 
-        // 👆 タップ・スワイプ操作の送信用イベント
+        // 👆 タップ・スワイプ操作送信用
         let startX = 0, startY = 0;
 
         touchArea.addEventListener('pointerdown', (e) => {
