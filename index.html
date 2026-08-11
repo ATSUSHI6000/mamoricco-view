@@ -99,6 +99,8 @@
   </div>
 
   <script>
+    let currentMember = null;
+
     async function startReceiver() {
       const statusText = document.getElementById('status-text');
       const videoElement = document.getElementById('remote-video');
@@ -131,11 +133,14 @@
           return;
         }
 
-        // 2. ルームに接続
+        // 2. ルームに接続（🌟 重複エラー防止のためランダムIDを末尾に付与）
         statusText.innerText = "🌐 2/3 ルームに接続中...";
         const context = await SkyWayContext.Create(data.authToken);
         const room = await RoomClass.FindOrCreate(context, { name: 'mamoricco-room' });
-        const member = await room.join({ name: 'iPhoneReceiver' });
+        
+        const randomId = Math.floor(Math.random() * 10000);
+        const member = await room.join({ name: 'iPhoneReceiver_' + randomId });
+        currentMember = member;
 
         // 3. データストリーム（遠隔操作用）の準備
         let dataStream = null;
@@ -158,7 +163,6 @@
           if (pub.contentType === 'video') {
             statusText.innerText = "📥 高画質映像を受信中...";
             try {
-              // 🌟 最高画質設定（最高優先度・帯域上限なし）で購読
               const { stream } = await member.subscribe(pub.id, {
                 preferredEncoding: 'high'
               });
@@ -202,6 +206,13 @@
         statusText.innerText = "❌ エラー: " + (err.message || err);
       }
     }
+
+    // 🌟 ページを閉じた/更新した時に古い接続をきれいに離脱させる処理
+    window.addEventListener('beforeunload', () => {
+      if (currentMember && currentMember.leave) {
+        currentMember.leave();
+      }
+    });
 
     window.addEventListener('load', startReceiver);
   </script>
