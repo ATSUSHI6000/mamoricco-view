@@ -125,7 +125,7 @@
 
         statusText.innerText = "🌐 2/3 ルームに接続中...";
         const context = await SkyWayContext.Create(data.authToken);
-        const room = await RoomClass.FindOrCreate(context, { name: 'mamorikko-room' });
+        const room = await RoomClass.FindOrCreate(context, { name: 'mamoricco-room' });
         const member = await room.join({ name: 'iPhoneReceiver' });
 
         let dataStream = null;
