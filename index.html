@@ -2,277 +2,225 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>まもりっこ - 受信・遠隔操作モニター</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>まもりっこ - 受信モニター</title>
+  <!-- SkyWay SDK の読み込み -->
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/token/dist/skyway_token-latest.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-    }
+    * { box-sizing: border-box; }
     body {
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      background-color: #fce4ec;
       margin: 0;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
+      padding: 16px;
+      background-color: #fce4ec;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      text-align: center;
+      color: #333;
     }
     .card {
       background: white;
+      padding: 20px;
       border-radius: 20px;
-      padding: 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 400px;
-      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      max-width: 420px;
+      margin: 0 auto;
     }
-    h2 {
-      color: #e91e63;
+    h1 {
       font-size: 20px;
-      margin-top: 5px;
+      color: #e91e63;
+      margin-top: 0;
       margin-bottom: 15px;
     }
     .video-container {
       position: relative;
       width: 100%;
-      aspect-ratio: 9 / 16;
-      background: #000;
-      border-radius: 12px;
+      background-color: #000;
+      border-radius: 14px;
       overflow: hidden;
       touch-action: none;
-      transition: all 0.3s ease;
     }
-    
-    /* 🌟 全画面モード表示（iPhoneの操作性を壊さず画面全体に拡大） */
-    .video-container.is-fullscreen {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      aspect-ratio: auto !important;
-      z-index: 9999 !important;
-      border-radius: 0 !important;
-    }
-
     video {
       width: 100%;
-      height: 100%;
+      height: 540px;
+      background-color: #000;
       object-fit: contain;
-      pointer-events: none !important;
-
-      /* 🌟 映像の輪郭と文字をくっきり補正する高画質CSS */
-      image-rendering: -webkit-optimize-contrast;
-      image-rendering: crisp-edges;
-    }
-    video::-webkit-media-controls,
-    video::-webkit-media-controls-enclosure,
-    video::-webkit-media-controls-panel {
-      display: none !important;
-      -webkit-appearance: none !important;
-    }
-    .touch-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 10;
+      display: block;
       cursor: pointer;
     }
-
-    /* 🌟 斜め矢印の全画面切り替えボタン */
-    .fullscreen-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 20;
-      background: rgba(0, 0, 0, 0.65);
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      border-radius: 8px;
-      width: 38px;
-      height: 38px;
-      font-size: 20px;
+    .controls {
+      margin-top: 12px;
       display: flex;
-      align-items: center;
+      gap: 10px;
       justify-content: center;
-      cursor: pointer;
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
     }
-    .fullscreen-btn:active {
-      transform: scale(0.92);
-      background: rgba(233, 30, 99, 0.85);
-    }
-
-    .status-badge {
-      margin-top: 15px;
-      padding: 8px 15px;
-      background: #fff0f5;
-      color: #d81b60;
-      border-radius: 20px;
+    .btn {
+      background-color: #e91e63;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
       font-weight: bold;
-      font-size: 13px;
-      display: inline-block;
-      word-break: break-all;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn:active {
+      opacity: 0.8;
+    }
+    .status {
+      margin-top: 15px;
+      font-size: 14px;
+      font-weight: bold;
+      color: #e91e63;
+      padding: 8px 12px;
+      background: #fff0f5;
+      border-radius: 10px;
     }
   </style>
-  <!-- 🌟 SkyWay公式CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/room/dist/skyway_room-latest.js"></script>
 </head>
 <body>
 
   <div class="card">
-    <h2>❤️ まもりっこ 遠隔操作モニター</h2>
+    <h1>❤️ まもりっこ 画面モニター</h1>
+    <div class="video-container" id="video-box">
+      <video id="remote-video" autoplay playsinline></video>
+    </div>
     
-    <div class="video-container" id="video-container">
-      <!-- 🌟 全画面切り替え（斜め矢印）ボタン -->
-      <button class="fullscreen-btn" id="fullscreen-btn" title="全画面切り替え">⤢</button>
-      
-      <video id="remote-video" autoplay playsinline muted webkit-playsinline disablepictureinpicture></video>
-      <div class="touch-overlay" id="touch-area"></div>
+    <div class="controls">
+      <button class="btn" id="fullscreen-btn">📺 全画面表示</button>
     </div>
 
-    <div class="status-badge" id="status-text">📡 接続準備中...</div>
+    <div class="status" id="status-text">📡 接続準備中...</div>
   </div>
 
   <script>
-    let currentMember = null;
+    const APP_ID = "66b8e792-5087-4504-9d55-00cd6560ebb5";
+    const SECRET_KEY = "BnCIV4hMkw0Nz9S6cIF8vfBPPZ+wz8I1mGcgy1rog94=";
+    const ROOM_NAME = "mamorikko-room";
 
-    // 🌟 全画面表示の切り替え機能
-    const videoContainer = document.getElementById('video-container');
-    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    let dataStream = null;
 
-    fullscreenBtn.addEventListener('click', (e) => {
-      e.stopPropagation(); // タップイベントの伝播を防止
-      videoContainer.classList.toggle('is-fullscreen');
-      
-      if (videoContainer.classList.contains('is-fullscreen')) {
-        fullscreenBtn.innerText = '⤡'; // 元に戻すアイコン
-      } else {
-        fullscreenBtn.innerText = '⤢'; // 拡大アイコン
-      }
-    });
-
-    async function startReceiver() {
-      const statusText = document.getElementById('status-text');
-      const videoElement = document.getElementById('remote-video');
-      const touchArea = document.getElementById('touch-area');
-
-      const skywayObj = window.skyway_room || window.skywayRoom || window.skyway;
-
-      if (!skywayObj) {
-        statusText.innerText = "❌ ライブラリ未検出（再読み込みしてください）";
-        return;
-      }
-
-      const SkyWayContext = skywayObj.SkyWayContext;
-      const RoomClass = skywayObj.SFURoom || skywayObj.SkyWayRoom || skywayObj.SfuRoom || skywayObj.SkyWayChannel;
-      const LocalDataStream = skywayObj.LocalDataStream;
-
-      if (!RoomClass) {
-        statusText.innerText = "❌ ルーム定義エラー";
-        return;
-      }
+    async function startReceive() {
+      const statusText = document.getElementById("status-text");
+      const videoElement = document.getElementById("remote-video");
+      const videoBox = document.getElementById("video-box");
+      const fullscreenBtn = document.getElementById("fullscreen-btn");
 
       try {
-        // 1. GET通信でGASからトークンを取得
-        statusText.innerText = "🔑 1/3 トークンを取得中...";
-        const response = await fetch('https://script.google.com/macros/s/AKfycbwk4miPAQ26KXHmcSym-qxWQELIuyaD33KeQhrNqoZb6ttc3pbdRtniEdE7u48sghFV/exec?contentType=get_skyway_token');
-        const data = await response.json();
-        
-        if (!data || !data.authToken) {
-          statusText.innerText = "❌ トークン取得に失敗しました";
-          return;
-        }
+        const { SkyWayAuthToken } = skyway_token;
+        const { SkyWayContext, SkyWayRoom, LocalDataStream } = skyway_room;
 
-        // 2. ルームに接続（重複エラー防止のためランダムIDを付与）
-        statusText.innerText = "🌐 2/3 ルームに接続中...";
-        const context = await SkyWayContext.Create(data.authToken);
-        const room = await RoomClass.FindOrCreate(context, { name: 'mamoricco-room' });
-        
-        const randomId = Math.floor(Math.random() * 10000);
-        const member = await room.join({ name: 'iPhoneReceiver_' + randomId });
-        currentMember = member;
-
-        // 3. データストリーム（遠隔操作用）の準備
-        let dataStream = null;
-        try {
-          if (LocalDataStream) {
-            dataStream = new LocalDataStream();
-            await member.publish(dataStream);
-          } else if (SkyWayContext.CreateDataStream) {
-            dataStream = await SkyWayContext.CreateDataStream();
-            await member.publish(dataStream);
-          }
-        } catch (dsErr) {
-          console.log('DataStream Notice:', dsErr);
-        }
-
-        statusText.innerText = "🔍 3/3 Android（送信元）の画面を探しています...";
-
-        // 4. 映像受信＆高画質ストリーム要求処理
-        const subscribeAndPlay = async (pub) => {
-          if (pub.contentType === 'video') {
-            statusText.innerText = "📥 高画質映像を受信中...";
-            try {
-              const { stream } = await member.subscribe(pub.id, {
-                preferredEncoding: 'high'
-              });
-              
-              stream.attach(videoElement);
-              await videoElement.play();
-              statusText.innerText = "🎉 遠隔操作が可能です！";
-            } catch (e) {
-              statusText.innerText = "🎉 画面を一度タップしてください！";
+        const now = Math.floor(Date.now() / 1000);
+        const token = new SkyWayAuthToken({
+          jti: crypto.randomUUID(),
+          iat: now,
+          exp: now + 3600 * 12,
+          scope: {
+            app: {
+              id: APP_ID,
+              turn: true,
+              actions: ["read"],
+              channels: [
+                {
+                  id: "*",
+                  name: "*",
+                  actions: ["write"],
+                  members: [
+                    {
+                      id: "*",
+                      name: "*",
+                      actions: ["write"],
+                      publication: { actions: ["write"] },
+                      subscription: { actions: ["write"] }
+                    }
+                  ],
+                  sfuBots: [
+                    {
+                      actions: ["write"],
+                      forwardings: [{ actions: ["write"] }]
+                    }
+                  ]
+                }
+              ]
             }
+          }
+        }).encode(SECRET_KEY);
+
+        statusText.innerText = "🔄 SkyWayサーバーに接続中...";
+
+        const context = await SkyWayContext.Create(token);
+        const room = await SkyWayRoom.FindOrCreate(context, {
+          name: ROOM_NAME,
+          type: "sfu"
+        });
+
+        const me = await room.join();
+
+        // 遠隔操作データ送信用のデータストリームを作成して公開
+        dataStream = new LocalDataStream();
+        await me.publish(dataStream);
+
+        statusText.innerText = "🟢 送信元（Android）の画面を探しています...";
+
+        // 既存の配信がある場合
+        room.publications.forEach(async (pub) => {
+          if (pub.publisher.id !== me.id) {
+            const { stream } = await me.subscribe(pub.id);
+            if (stream.contentType === "video") {
+              stream.attach(videoElement);
+              statusText.innerText = "🎉 Android画面を受信中！（タップ操作可能）";
+            }
+          }
+        });
+
+        // 新しい配信が開始された場合
+        room.onStreamPublished.add(async (e) => {
+          if (e.publisher.id !== me.id) {
+            const { stream } = await me.subscribe(e.publication.id);
+            if (stream.contentType === "video") {
+              stream.attach(videoElement);
+              statusText.innerText = "🎉 Android画面を受信中！（タップ操作可能）";
+            }
+          }
+        });
+
+        // 画面タップイベントの処理（iPhone側からAndroidへ座標送信）
+        const handleTap = (e) => {
+          if (!dataStream) return;
+
+          const rect = videoElement.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+          // タップ位置を 0.0 ～ 1.0 の割合で計算
+          const x = (clientX - rect.left) / rect.width;
+          const y = (clientY - rect.top) / rect.height;
+
+          if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+            const tapData = JSON.stringify({ type: "tap", x: x, y: y });
+            dataStream.write(tapData);
+            console.log("送信タップ座標:", x, y);
           }
         };
 
-        if (room.publications) room.publications.forEach(pub => subscribeAndPlay(pub));
-        if (room.onStreamPublished) room.onStreamPublished.add(e => subscribeAndPlay(e.publication));
+        videoElement.addEventListener("touchstart", handleTap, { passive: true });
+        videoElement.addEventListener("click", handleTap);
 
-        // 5. タップ・スワイプ操作送信処理
-        let startX = 0, startY = 0;
-        touchArea.addEventListener('pointerdown', (e) => {
-          const rect = touchArea.getBoundingClientRect();
-          startX = (e.clientX - rect.left) / rect.width;
-          startY = (e.clientY - rect.top) / rect.height;
-        });
-
-        touchArea.addEventListener('pointerup', (e) => {
-          if (!dataStream) return;
-          const rect = touchArea.getBoundingClientRect();
-          const endX = (e.clientX - rect.left) / rect.width;
-          const endY = (e.clientY - rect.top) / rect.height;
-
-          const dist = Math.hypot(endX - startX, endY - startY);
-          if (dist < 0.03) {
-            dataStream.write(JSON.stringify({ type: 'tap', x: endX, y: endY }));
-          } else {
-            dataStream.write(JSON.stringify({ type: 'swipe', sx: startX, sy: startY, ex: endX, ey: endY }));
+        // 全画面表示ボタンの処理
+        fullscreenBtn.addEventListener("click", () => {
+          if (videoElement.requestFullscreen) {
+            videoElement.requestFullscreen();
+          } else if (videoElement.webkitRequestFullscreen) {
+            videoElement.webkitRequestFullscreen(); // iOS Safari用
           }
         });
 
-      } catch (err) {
-        console.error(err);
-        statusText.innerText = "❌ エラー: " + (err.message || err);
+      } catch (e) {
+        console.error(e);
+        statusText.innerText = "❌ 接続エラー: " + e.message;
       }
     }
 
-    // ページ離脱・更新時に古い接続をきれいに切断
-    window.addEventListener('beforeunload', () => {
-      if (currentMember && currentMember.leave) {
-        currentMember.leave();
-      }
-    });
-
-    window.addEventListener('load', startReceiver);
+    window.addEventListener("load", startReceive);
   </script>
 </body>
 </html>
