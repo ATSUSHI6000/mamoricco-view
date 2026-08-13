@@ -148,9 +148,11 @@
         statusText.innerText = "🔄 SkyWayサーバーに接続中...";
 
         const context = await SkyWayContext.Create(token);
+        
+        // DataStreamを使うため、typeを "p2p" に設定
         const room = await SkyWayRoom.FindOrCreate(context, {
           name: ROOM_NAME,
-          type: "sfu"
+          type: "p2p"
         });
 
         const me = await room.join();
