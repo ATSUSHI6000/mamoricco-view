@@ -38,8 +38,11 @@
       border-radius: 14px;
       overflow: hidden;
       touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    /* 📺 WEB全画面用スタイル（再生ボタンを出さずに画面いっぱいに拡大） */
+    /* 📺 全画面時に画面いっぱいに収めるスタイル */
     .video-container.fullscreen {
       position: fixed;
       top: 0;
@@ -48,6 +51,7 @@
       height: 100vh;
       z-index: 9999;
       border-radius: 0;
+      background-color: #000;
     }
     video {
       width: 100%;
@@ -58,19 +62,21 @@
       cursor: pointer;
     }
     .video-container.fullscreen video {
+      width: 100vw;
       height: 100vh;
+      object-fit: contain;
     }
     .exit-btn {
       position: absolute;
-      top: 12px;
-      right: 12px;
+      top: 16px;
+      right: 16px;
       z-index: 10000;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.7);
       color: white;
       border: 1px solid rgba(255, 255, 255, 0.8);
-      padding: 6px 14px;
+      padding: 8px 16px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: bold;
       cursor: pointer;
     }
@@ -126,6 +132,7 @@
     const ROOM_NAME = "mamoricco-room-v2";
 
     let dataStream = null;
+    let lastTapTime = 0; // ⚡ 連打・ツータップ防止用ガード
 
     async function startReceive() {
       const statusText = document.getElementById("status-text");
@@ -185,13 +192,11 @@
 
         const me = await room.join();
 
-        // 遠隔操作データ送信用のデータストリームを作成して公開
         dataStream = new LocalDataStream();
         await me.publish(dataStream);
 
         statusText.innerText = "🟢 送信元（Android）の画面を探しています...";
 
-        // 既存の配信がある場合
         room.publications.forEach(async (pub) => {
           if (pub.publisher.id !== me.id) {
             const { stream } = await me.subscribe(pub.id);
@@ -202,7 +207,6 @@
           }
         });
 
-        // 新しい配信が開始された場合
         room.onStreamPublished.add(async (e) => {
           if (e.publisher.id !== me.id) {
             const { stream } = await me.subscribe(e.publication.id);
@@ -213,35 +217,66 @@
           }
         });
 
-        // 画面タップイベントの処理（iPhone側からAndroidへ座標送信）
+        // 🎯 ズレ防止＆ツータップ防止機能付きの精密タップ処理
         const handleTap = (e) => {
           if (!dataStream) return;
+
+          // ⚡ ツータップ防止：300ミリ秒以内の連続イベント（touchstartとclickの重複）をカット！
+          const nowTime = Date.now();
+          if (nowTime - lastTapTime < 300) return;
+          lastTapTime = nowTime;
 
           const rect = videoElement.getBoundingClientRect();
           const clientX = e.touches ? e.touches[0].clientX : e.clientX;
           const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-          const x = (clientX - rect.left) / rect.width;
-          const y = (clientY - rect.top) / rect.height;
+          const touchX = clientX - rect.left;
+          const touchY = clientY - rect.top;
+
+          // 📐 黒帯（余白）を自動補正する高精度座標計算
+          const videoWidth = videoElement.videoWidth || 720;
+          const videoHeight = videoElement.videoHeight || 1280;
+          const videoAspect = videoWidth / videoHeight;
+          const rectAspect = rect.width / rect.height;
+
+          let renderWidth, renderHeight, offsetX, offsetY;
+
+          if (rectAspect > videoAspect) {
+            // 左右に黒帯がある場合
+            renderHeight = rect.height;
+            renderWidth = rect.height * videoAspect;
+            offsetX = (rect.width - renderWidth) / 2;
+            offsetY = 0;
+          } else {
+            // 上下に黒帯がある場合
+            renderWidth = rect.width;
+            renderHeight = rect.width / videoAspect;
+            offsetX = 0;
+            offsetY = (rect.height - renderHeight) / 2;
+          }
+
+          // 黒帯を除いた「純粋な画面」上の位置(0.0 ～ 1.0)
+          const x = (touchX - offsetX) / renderWidth;
+          const y = (touchY - offsetY) / renderHeight;
 
           if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
             const tapData = JSON.stringify({ type: "tap", x: x, y: y });
             dataStream.write(tapData);
-            console.log("送信タップ座標:", x, y);
+            console.log("送信タップ座標（補正済）:", x, y);
           }
         };
 
+        // イベント二重発火を防ぐため touchstart メインに設定
         videoElement.addEventListener("touchstart", handleTap, { passive: true });
         videoElement.addEventListener("click", handleTap);
 
-        // 📺 WEB全画面モードの切り替え処理
         fullscreenBtn.addEventListener("click", () => {
           videoBox.classList.add("fullscreen");
           exitFullscreenBtn.style.display = "block";
         });
 
         exitFullscreenBtn.addEventListener("click", (e) => {
-          e.stopPropagation(); // 解除ボタンのタップがAndroidに誤送信されるのを防ぐ
+          e.stopPropagation();
           videoBox.classList.remove("fullscreen");
           exitFullscreenBtn.style.display = "none";
         });
