@@ -143,7 +143,6 @@
     let dataStream = null;
     let meMember = null;
 
-    // 👆 タッチ操作（スワイプ＆タップ判別用）変数
     let touchStartX = 0;
     let touchStartY = 0;
     let isTouching = false;
@@ -233,7 +232,6 @@
           }
         });
 
-        // 📐 画面上の座標を 0.0 〜 1.0 に変換する共通関数
         const getNormalizedCoords = (clientX, clientY) => {
           const rect = videoElement.getBoundingClientRect();
           const touchX = clientX - rect.left;
@@ -267,7 +265,6 @@
           return { x, y };
         };
 
-        // 👆 タッチ開始
         videoElement.addEventListener("touchstart", (e) => {
           if (!dataStream || e.touches.length === 0) return;
           touchStartX = e.touches[0].clientX;
@@ -275,14 +272,12 @@
           isTouching = true;
         }, { passive: true });
 
-        // 👆 タッチ中（画面スクロール防止）
         videoElement.addEventListener("touchmove", (e) => {
           if (isTouching) {
-            e.preventDefault(); // Safari自体のスクロールを止めて操作に集中させる
+            e.preventDefault();
           }
         }, { passive: false });
 
-        // 👆 タッチ終了（移動距離でタップ vs スワイプを自動分岐！）
         videoElement.addEventListener("touchend", (e) => {
           if (!dataStream || !isTouching || e.changedTouches.length === 0) return;
           isTouching = false;
@@ -294,12 +289,12 @@
           const dy = endY - touchStartY;
           const distance = Math.sqrt(dx * dx + dy * dy);
 
-          // 15ピクセル未満の移動なら「タップ」
-          if (distance < 15) {
+          // ⚡ 感度アップ：8ピクセル未満の微小な動きだけを「タップ」と判定
+          if (distance < 8) {
             const pos = getNormalizedCoords(endX, endY);
             dataStream.write(JSON.stringify({ type: "tap", x: pos.x, y: pos.y }));
           } 
-          // 15ピクセル以上の移動なら「スワイプ（スクロール）」
+          // ⚡ 8ピクセル以上指が動いたら即座に「爆速スワイプ」送信！
           else {
             const startPos = getNormalizedCoords(touchStartX, touchStartY);
             const endPos = getNormalizedCoords(endX, endY);
@@ -308,7 +303,8 @@
               startX: startPos.x,
               startY: startPos.y,
               endX: endPos.x,
-              endY: endPos.y
+              endY: endPos.y,
+              duration: 150 // ⚡ 150msの超高速スワイプ！
             }));
           }
         });
