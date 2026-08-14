@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>まもりっこ - 受信モニター</title>
   <!-- SkyWay SDK の読み込み -->
   <script src="https://cdn.jsdelivr.net/npm/@skyway-sdk/token/dist/skyway_token-latest.js"></script>
@@ -42,16 +42,19 @@
       align-items: center;
       justify-content: center;
     }
-    /* 📺 全画面時に画面いっぱいに収めるスタイル */
+    /* 📺 iPhone Safariのメニューバーを考慮した見切れゼロの全画面スタイル */
     .video-container.fullscreen {
       position: fixed;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
+      right: 0;
+      bottom: 0;
+      width: 100dvw;
+      height: 100dvh;
       z-index: 9999;
       border-radius: 0;
       background-color: #000;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
     video {
       width: 100%;
@@ -62,8 +65,10 @@
       cursor: pointer;
     }
     .video-container.fullscreen video {
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
       object-fit: contain;
     }
     .exit-btn {
@@ -71,7 +76,7 @@
       top: 16px;
       right: 16px;
       z-index: 10000;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.75);
       color: white;
       border: 1px solid rgba(255, 255, 255, 0.8);
       padding: 8px 16px;
@@ -221,7 +226,7 @@
         const handleTap = (e) => {
           if (!dataStream) return;
 
-          // ⚡ ツータップ防止：300ミリ秒以内の連続イベント（touchstartとclickの重複）をカット！
+          // ⚡ ツータップ防止：300ミリ秒以内の連続イベントをガード
           const nowTime = Date.now();
           if (nowTime - lastTapTime < 300) return;
           lastTapTime = nowTime;
@@ -266,7 +271,6 @@
           }
         };
 
-        // イベント二重発火を防ぐため touchstart メインに設定
         videoElement.addEventListener("touchstart", handleTap, { passive: true });
         videoElement.addEventListener("click", handleTap);
 
