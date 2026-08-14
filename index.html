@@ -42,7 +42,6 @@
       align-items: center;
       justify-content: center;
     }
-    /* 📺 iPhone Safariのメニューバーを考慮した見切れゼロの全画面スタイル */
     .video-container.fullscreen {
       position: fixed;
       top: 0;
@@ -137,7 +136,7 @@
     const ROOM_NAME = "mamoricco-room-v2";
 
     let dataStream = null;
-    let lastTapTime = 0; // ⚡ 連打・ツータップ防止用ガード
+    let lastTapTime = 0;
 
     async function startReceive() {
       const statusText = document.getElementById("status-text");
@@ -222,11 +221,9 @@
           }
         });
 
-        // 🎯 ズレ防止＆ツータップ防止機能付きの精密タップ処理
         const handleTap = (e) => {
           if (!dataStream) return;
 
-          // ⚡ ツータップ防止：300ミリ秒以内の連続イベントをガード
           const nowTime = Date.now();
           if (nowTime - lastTapTime < 300) return;
           lastTapTime = nowTime;
@@ -238,7 +235,6 @@
           const touchX = clientX - rect.left;
           const touchY = clientY - rect.top;
 
-          // 📐 黒帯（余白）を自動補正する高精度座標計算
           const videoWidth = videoElement.videoWidth || 720;
           const videoHeight = videoElement.videoHeight || 1280;
           const videoAspect = videoWidth / videoHeight;
@@ -247,28 +243,26 @@
           let renderWidth, renderHeight, offsetX, offsetY;
 
           if (rectAspect > videoAspect) {
-            // 左右に黒帯がある場合
             renderHeight = rect.height;
             renderWidth = rect.height * videoAspect;
             offsetX = (rect.width - renderWidth) / 2;
             offsetY = 0;
           } else {
-            // 上下に黒帯がある場合
             renderWidth = rect.width;
             renderHeight = rect.width / videoAspect;
             offsetX = 0;
             offsetY = (rect.height - renderHeight) / 2;
           }
 
-          // 黒帯を除いた「純粋な画面」上の位置(0.0 ～ 1.0)
-          const x = (touchX - offsetX) / renderWidth;
-          const y = (touchY - offsetY) / renderHeight;
+          // 範囲（0.0 〜 1.0）を上下左右のギリギリまでクランプ処理
+          let x = (touchX - offsetX) / renderWidth;
+          let y = (touchY - offsetY) / renderHeight;
 
-          if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
-            const tapData = JSON.stringify({ type: "tap", x: x, y: y });
-            dataStream.write(tapData);
-            console.log("送信タップ座標（補正済）:", x, y);
-          }
+          x = Math.max(0, Math.min(1, x));
+          y = Math.max(0, Math.min(1, y));
+
+          const tapData = JSON.stringify({ type: "tap", x: x, y: y });
+          dataStream.write(tapData);
         };
 
         videoElement.addEventListener("touchstart", handleTap, { passive: true });
