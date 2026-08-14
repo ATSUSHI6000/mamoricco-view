@@ -89,6 +89,7 @@
       display: flex;
       gap: 10px;
       justify-content: center;
+      flex-wrap: wrap;
     }
     .btn {
       background-color: #e91e63;
@@ -99,6 +100,9 @@
       font-weight: bold;
       cursor: pointer;
       font-size: 14px;
+    }
+    .btn-disconnect {
+      background-color: #757575;
     }
     .btn:active {
       opacity: 0.8;
@@ -125,6 +129,7 @@
     
     <div class="controls">
       <button class="btn" id="fullscreen-btn">📺 全画面表示</button>
+      <button class="btn btn-disconnect" id="disconnect-btn">🔴 配信を切断</button>
     </div>
 
     <div class="status" id="status-text">📡 接続準備中...</div>
@@ -136,6 +141,7 @@
     const ROOM_NAME = "mamoricco-room-v2";
 
     let dataStream = null;
+    let meMember = null;
     let lastTapTime = 0;
 
     async function startReceive() {
@@ -144,6 +150,7 @@
       const videoBox = document.getElementById("video-box");
       const fullscreenBtn = document.getElementById("fullscreen-btn");
       const exitFullscreenBtn = document.getElementById("exit-fullscreen-btn");
+      const disconnectBtn = document.getElementById("disconnect-btn");
 
       try {
         const { SkyWayAuthToken } = skyway_token;
@@ -195,6 +202,7 @@
         });
 
         const me = await room.join();
+        meMember = me;
 
         dataStream = new LocalDataStream();
         await me.publish(dataStream);
@@ -254,7 +262,6 @@
             offsetY = (rect.height - renderHeight) / 2;
           }
 
-          // 範囲（0.0 〜 1.0）を上下左右のギリギリまでクランプ処理
           let x = (touchX - offsetX) / renderWidth;
           let y = (touchY - offsetY) / renderHeight;
 
@@ -277,6 +284,23 @@
           e.stopPropagation();
           videoBox.classList.remove("fullscreen");
           exitFullscreenBtn.style.display = "none";
+        });
+
+        // 🔴 iPhone側からの「切断ボタン」の処理
+        disconnectBtn.addEventListener("click", async () => {
+          if (confirm("画面共有と遠隔操作を切断しますか？")) {
+            if (dataStream) {
+              // Android側へ切断命令を送信！
+              dataStream.write(JSON.stringify({ type: "disconnect" }));
+            }
+            if (meMember) {
+              await meMember.leave();
+            }
+            videoElement.srcObject = null;
+            videoBox.classList.remove("fullscreen");
+            exitFullscreenBtn.style.display = "none";
+            statusText.innerText = "⏹️ 配信を切断しました";
+          }
         });
 
       } catch (e) {
