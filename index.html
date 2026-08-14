@@ -82,8 +82,8 @@
   <div class="card">
     <h1>❤️ まもりっこ 画面モニター</h1>
     <div class="video-container" id="video-box">
-      <!-- controlsを追加して右上の全画面斜め矢印を復活！ -->
-      <video id="remote-video" autoplay playsinline controls muted></video>
+      <!-- controlsを外して、真ん中の邪魔な再生ボタンを消去！ -->
+      <video id="remote-video" autoplay playsinline muted></video>
     </div>
     
     <div class="controls">
@@ -206,8 +206,11 @@
         videoElement.addEventListener("touchstart", handleTap, { passive: true });
         videoElement.addEventListener("click", handleTap);
 
+        // 全画面表示ボタン（iPhone Safariにもバッチリ対応！）
         fullscreenBtn.addEventListener("click", () => {
-          if (videoElement.requestFullscreen) {
+          if (videoElement.webkitEnterFullscreen) {
+            videoElement.webkitEnterFullscreen(); // iPhone Safari用
+          } else if (videoElement.requestFullscreen) {
             videoElement.requestFullscreen();
           } else if (videoElement.webkitRequestFullscreen) {
             videoElement.webkitRequestFullscreen();
