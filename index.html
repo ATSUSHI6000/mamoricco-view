@@ -82,7 +82,8 @@
   <div class="card">
     <h1>❤️ まもりっこ 画面モニター</h1>
     <div class="video-container" id="video-box">
-      <video id="remote-video" autoplay playsinline muted></video>
+      <!-- controlsを追加して右上の全画面斜め矢印を復活！ -->
+      <video id="remote-video" autoplay playsinline controls muted></video>
     </div>
     
     <div class="controls">
@@ -95,7 +96,6 @@
   <script>
     const APP_ID = "66b8e792-5087-4504-9d55-00cd6560ebb5";
     const SECRET_KEY = "BnCIV4hMkw0Nz9S6cIF8vfBPPZ+wz8I1mGcgy1rog94=";
-    // 古いキャシュを避けるため部屋名を v2 に変更！
     const ROOM_NAME = "mamoricco-room-v2";
 
     let dataStream = null;
@@ -150,7 +150,6 @@
 
         const context = await SkyWayContext.Create(token);
         
-        // DataStreamを使うため、typeを "p2p" に設定
         const room = await SkyWayRoom.FindOrCreate(context, {
           name: ROOM_NAME,
           type: "p2p"
@@ -194,7 +193,6 @@
           const clientX = e.touches ? e.touches[0].clientX : e.clientX;
           const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-          // タップ位置を 0.0 ～ 1.0 の割合で計算
           const x = (clientX - rect.left) / rect.width;
           const y = (clientY - rect.top) / rect.height;
 
@@ -208,12 +206,11 @@
         videoElement.addEventListener("touchstart", handleTap, { passive: true });
         videoElement.addEventListener("click", handleTap);
 
-        // 全画面表示ボタンの処理
         fullscreenBtn.addEventListener("click", () => {
           if (videoElement.requestFullscreen) {
             videoElement.requestFullscreen();
           } else if (videoElement.webkitRequestFullscreen) {
-            videoElement.webkitRequestFullscreen(); // iOS Safari用
+            videoElement.webkitRequestFullscreen();
           }
         });
 
